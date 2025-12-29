@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>NEON RUNNER: ACTION MODE</title>
+    <style>
+        :root { --neon-cyan: #0ff; --neon-pink: #ff0055; --bg-dark: #08080c; --neon-purple: #a200ff; --neon-green: #39ff14; --gold: #ffd700; }
+        body { margin: 0; overflow: hidden; background: var(--bg-dark); font-family: 'Segoe UI', sans-serif; touch-action: none; user-select: none; color: white; }
+        canvas { display: block; transition: transform 0.1s; }
+
+        #orientation-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #08080c; color: #0ff; z-index: 9999;
+            display: none; flex-direction: column; justify-content: center; align-items: center; text-align: center;
+        }
+        .phone-icon { font-size: 50px; margin-bottom: 20px; animation: rotatePhone 2s infinite; }
+        @keyframes rotatePhone { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-90deg); } }
+        @media screen and (orientation: portrait) { #orientation-overlay { display: flex; } }
+
+        body::after {
+            content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            box-shadow: inset 0 0 40px rgba(0, 255, 255, 0.2); pointer-events: none; z-index: 1000;
+            animation: neonPulse 3s infinite alternate;
+        }
+        @keyframes neonPulse { from { opacity: 0.4; } to { opacity: 0.9; } }
+
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; z-index: 500; background: rgba(0,0,0,0.85); }
+        .glass-box { background: rgba(20, 20, 30, 0.95); backdrop-filter: blur(15px); border: 2px solid var(--neon-cyan); padding: 20px; border-radius: 20px; text-align: center; width: 320px; max-height: 85vh; overflow-y: auto; }
+        .hidden { display: none !important; }
+
+        .btn {
+            background: linear-gradient(90deg, #ff0055, #0ff, #a200ff, #ff0055);
+            background-size: 300%; border: none; color: white; padding: 12px;
+            font-size: 1rem; text-transform: uppercase; border-radius: 10px;
+            cursor: pointer; margin: 8px 0; width: 100%; display: block; font-weight: bold;
+            animation: rainbowBtn 5s linear infinite;
+        }
+        .btn-pause { position: absolute; top: 20px; right: 20px; width: 45px; height: 45px; border-radius: 50%; z-index: 100; background: rgba(0,255,255,0.1); border: 1px solid var(--neon-cyan); color: white; cursor: pointer; font-weight: bold; }
+        
+        @keyframes rainbowBtn { 0% { background-position: 0%; } 100% { background-position: 100%; } }
+
+        #hud { position: absolute; top: 20px; left: 20px; pointer-events: none; z-index: 50; }
+        .stat { font-size: 1.1rem; font-weight: bold; text-shadow: 0 0 10px rgba(0,255,255,0.5); }
+        
+        .grid-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 15px 0; }
+        .item-card { border: 1px solid #333; padding: 10px; border-radius: 10px; cursor: pointer; font-size: 11px; transition: 0.2s; }
+        .item-card.selected { border-color: var(--neon-cyan); background: rgba(0,255,255,0.15); box-shadow: 0 0 10px var(--neon-cyan); }
+        .color-dot { width: 18px; height: 18px; border-radius: 50%; margin: 0 auto 5px; border: 1px solid white; }
+        .rainbow-bg { background: linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet); background-size: 200%; animation: drift 2s linear infinite; }
+        
+        .leaderboard-item { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #222; font-size: 0.9rem; }
+        .leaderboard-item.top1 { color: var(--gold); font-weight: bold; border-bottom-color: var(--gold); }
+        
+        @keyframes drift { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+    </style>
+</head>
+<body>
+
+    <div id="orientation-overlay">
+        <div class="phone-icon">📱</div>
+        <h2>LÜTFEN CİHAZI YAN ÇEVİR</h2>
+        <p>Aksiyon devam ediyor, yan çevir!</p>
+    </div>
+
+    <audio id="bgMusic" loop>
+        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="hud">
+        <div class="stat">SKOR: <span id="score">0</span></div>
+        <div class="stat" style="color: #ffd700;">💰 <span id="coins">0</span></div>
+        <div class="stat" style="color: var(--neon-pink); font-size: 0.8rem;">MAX: <span id="highscore">0</span></div>
+    </div>
+
+    <button id="pauseBtn" class="btn-pause hidden" onclick="pauseGame()">II</button>
+
+    <div id="menu-screen" class="overlay">
+        <div class="glass-box">
+            <h1 style="color: var(--neon-cyan); margin-bottom: 5px;">NEON RUNNER</h1>
+            <p id="profile-display" style="color: #888; margin-bottom: 15px; font-size: 0.9rem;">Hoşgeldin, <span id="cur-name" style="color:white">...</span></p>
+            <button class="btn" onclick="startGame()">OYUNU BAŞLAT</button>
+            <button class="btn" onclick="togglePanel('shop-panel')">MARKET</button>
+            <button class="btn" style="background: #333; animation: none;" onclick="togglePanel('leaderboard-panel')">SIRALAMA</button>
+            <button class="btn" style="background: #222; animation: none; font-size: 0.7rem;" onclick="togglePanel('profile-panel')">İSİM DEĞİŞTİR</button>
+        </div>
+    </div>
+
+    <div id="shop-panel" class="overlay hidden">
+        <div class="glass-box">
+            <h2 style="color: var(--neon-pink);">MARKET</h2>
+            <div class="grid-list" id="skin-list"></div>
+            <button class="btn" onclick="togglePanel('menu-screen')">GERİ</button>
+        </div>
+    </div>
+
+    <div id="leaderboard-panel" class="overlay hidden">
+        <div class="glass-box">
+            <h2 style="color: var(--gold);">TOP 5 RUNNER</h2>
+            <div id="leaderboard-list" style="margin-bottom: 20px;"></div>
+            <button class="btn" onclick="togglePanel('menu-screen')">GERİ</button>
+        </div>
+    </div>
+
+    <div id="profile-panel" class="overlay hidden">
+        <div class="glass-box">
+            <h2 style="color: var(--neon-purple);">PROFİL AYARI</h2>
+            <input type="text" id="usernameInput" placeholder="Oyuncu Adı..." maxlength="10" style="width: 80%; padding: 10px; border-radius: 5px; border: 1px solid var(--neon-cyan); background: transparent; color: white; text-align: center; margin-bottom: 20px;">
+            <button class="btn" onclick="saveName()">KAYDET</button>
+        </div>
+    </div>
+
+    <div id="pause-screen" class="overlay hidden">
+        <div class="glass-box">
+            <h1 style="color: var(--neon-cyan);">DURDU</h1>
+            <button class="btn" onclick="resumeGame()">DEVAM ET</button>
+            <button class="btn" style="background: #444; animation: none;" onclick="location.reload()">MENÜYE DÖN</button>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const music = document.getElementById('bgMusic');
+
+        let gameState = 'MENU';
+        let score = 0;
+        let coins = parseInt(localStorage.getItem('neon_coins')) || 0;
+        let highscore = parseInt(localStorage.getItem('neon_highscore')) || 0;
+        let playerName = localStorage.getItem('neon_name') || 'OYUNCU';
+        
+        let leaderboard = JSON.parse(localStorage.getItem('neon_leaderboard')) || [
+            {name: "BOT_X", score: 500},
+            {name: "CYBER", score: 300}
+        ];
+
+        // --- Hızlanma Ayarları ---
+        let speed = 4; // Başlangıç hızı düşürüldü (4'ten başlar)
+        let acceleration = 0.0015; // Hızlanma miktarı
+        let obstacles = [], stars = [], trail = [], jumpCount = 0;
+
+        const skins = [
+            { id: 'cyan', color: '#0ff', name: 'Siyan', price: 0 },
+            { id: 'pink', color: '#ff0055', name: 'Neon', price: 100 },
+            { id: 'green', color: '#39ff14', name: 'Zehir', price: 500 },
+            { id: 'gold', color: '#ffd700', name: 'Altın', price: 1500 },
+            { id: 'purple', color: '#a200ff', name: 'Vortex', price: 2000 },
+            { id: 'rainbow', color: 'rainbow', name: 'GÖKKUŞAĞI', price: 5000 }
+        ];
+
+        let ownedSkins = JSON.parse(localStorage.getItem('neon_owned')) || ['cyan'];
+        let activeSkin = localStorage.getItem('neon_active') || 'cyan';
+
+        const player = { x: 80, y: 0, size: 35, dy: 0, gravity: 0.7, jumpForce: -14 };
+
+        function init() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            player.y = canvas.height - 85;
+            stars = Array.from({length: 60}, () => ({
+                x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+                s: Math.random() * 2, v: Math.random() * 0.4, c: '#444'
+            }));
+            updateUI();
+            renderShop();
+            renderLeaderboard();
+        }
+
+        function updateUI() {
+            document.getElementById('score').innerText = Math.floor(score);
+            document.getElementById('coins').innerText = coins;
+            document.getElementById('highscore').innerText = highscore;
+            document.getElementById('cur-name').innerText = playerName;
+        }
+
+        function renderShop() {
+            const list = document.getElementById('skin-list'); list.innerHTML = '';
+            skins.forEach(s => {
+                const isOwned = ownedSkins.includes(s.id);
+                const item = document.createElement('div');
+                item.className = `item-card ${activeSkin === s.id ? 'selected' : ''}`;
+                item.innerHTML = `<div class="color-dot ${s.color==='rainbow'?'rainbow-bg':''}" style="${s.color==='rainbow'?'':'background:'+s.color}"></div><b>${s.name}</b><br>${isOwned ? (activeSkin === s.id ? 'AKTİF' : 'SEÇ') : s.price+'💰'}`;
+                item.onclick = () => {
+                    if (isOwned) activeSkin = s.id;
+                    else if (coins >= s.price) { coins -= s.price; ownedSkins.push(s.id); activeSkin = s.id; }
+                    saveGameData();
+                    renderShop();
+                };
+                list.appendChild(item);
+            });
+        }
+
+        function renderLeaderboard() {
+            const list = document.getElementById('leaderboard-list');
+            list.innerHTML = '';
+            const sorted = leaderboard.sort((a, b) => b.score - a.score).slice(0, 5);
+            sorted.forEach((entry, index) => {
+                const div = document.createElement('div');
+                div.className = `leaderboard-item ${index === 0 ? 'top1' : ''}`;
+                div.innerHTML = `<span>${index + 1}. ${entry.name}</span> <span>${Math.floor(entry.score)}</span>`;
+                list.appendChild(div);
+            });
+        }
+
+        function saveGameData() {
+            localStorage.setItem('neon_coins', coins);
+            localStorage.setItem('neon_owned', JSON.stringify(ownedSkins));
+            localStorage.setItem('neon_active', activeSkin);
+            localStorage.setItem('neon_highscore', highscore);
+            localStorage.setItem('neon_name', playerName);
+            localStorage.setItem('neon_leaderboard', JSON.stringify(leaderboard));
+            updateUI();
+        }
+
+        function saveName() {
+            const val = document.getElementById('usernameInput').value;
+            if(val) {
+                playerName = val.toUpperCase();
+                saveGameData();
+                togglePanel('menu-screen');
+            }
+        }
+
+        function togglePanel(id) { 
+            document.querySelectorAll('.overlay').forEach(el => el.classList.add('hidden')); 
+            document.getElementById(id).classList.remove('hidden'); 
+            if(id === 'leaderboard-panel') renderLeaderboard();
+        }
+
+        function startGame() { 
+            gameState = 'PLAYING'; score = 0; speed = 4; // Oyun 4 hızıyla başlar
+            obstacles = []; 
+            document.querySelectorAll('.overlay').forEach(el => el.classList.add('hidden')); 
+            document.getElementById('pauseBtn').classList.remove('hidden');
+            music.volume = 0.5; music.play();
+        }
+
+        function pauseGame() {
+            if(gameState === 'PLAYING') {
+                gameState = 'PAUSED';
+                music.pause();
+                togglePanel('pause-screen');
+            }
+        }
+
+        function resumeGame() {
+            gameState = 'PLAYING';
+            music.play();
+            document.getElementById('pause-screen').classList.add('hidden');
+        }
+
+        function handleJump() {
+            if (gameState === 'PLAYING' && jumpCount < 2) {
+                player.dy = player.jumpForce; jumpCount++;
+                canvas.style.transform = "translateY(-5px)"; setTimeout(() => canvas.style.transform = "translateY(0)", 50);
+            }
+        }
+
+        window.addEventListener('touchstart', (e) => { if(e.target.tagName === 'CANVAS') { handleJump(); e.preventDefault(); } }, {passive: false});
+        window.addEventListener('mousedown', (e) => { if(e.target.tagName === 'CANVAS') handleJump(); });
+
+        function update() {
+            if (gameState !== 'PLAYING') return;
+            score += 0.2; 
+            
+            // Hızlanma mekaniği: Skor arttıkça hız da azar azar artar
+            speed += acceleration; 
+            
+            player.dy += player.gravity; player.y += player.dy;
+            
+            const ground = canvas.height - 50;
+            if (player.y + player.size > ground) { player.y = ground - player.size; player.dy = 0; jumpCount = 0; }
+
+            // Engel çıkma olasılığı (Hız arttıkça engellerin arası dengelenir)
+            let obstacleChance = 0.015 + (speed * 0.0005);
+            if (Math.random() < obstacleChance) {
+                obstacles.push({ x: canvas.width, w: 25, h: 30 + Math.random()*45, c: `hsl(${Math.random()*360}, 100%, 50%)` });
+            }
+
+            obstacles.forEach((o, i) => {
+                o.x -= speed;
+                if (player.x < o.x + o.w && player.x + player.size > o.x && player.y + player.size > ground - o.h) {
+                    const finalScore = Math.floor(score);
+                    coins += Math.floor(finalScore/5);
+                    
+                    if(finalScore > highscore) highscore = finalScore;
+                    
+                    const playerIndex = leaderboard.findIndex(l => l.name === playerName);
+                    if(playerIndex > -1) {
+                        if(finalScore > leaderboard[playerIndex].score) leaderboard[playerIndex].score = finalScore;
+                    } else {
+                        leaderboard.push({name: playerName, score: finalScore});
+                    }
+
+                    saveGameData();
+                    gameState = 'MENU'; music.pause(); music.currentTime = 0;
+                    document.getElementById('pauseBtn').classList.add('hidden');
+                    togglePanel('menu-screen');
+                }
+                if (o.x < -50) obstacles.splice(i, 1);
+            });
+            updateUI();
+        }
+
+        function draw() {
+            ctx.fillStyle = '#08080c'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            stars.forEach(s => { if(gameState === 'PLAYING') s.x -= s.v; if(s.x < 0) s.x = canvas.width; ctx.fillStyle = s.c; ctx.fillRect(s.x, s.y, s.s, s.s); });
+            
+            ctx.fillStyle = '#111'; ctx.fillRect(0, canvas.height-50, canvas.width, 50);
+            ctx.fillStyle = varColor('--neon-cyan'); ctx.fillRect(0, canvas.height-51, canvas.width, 2);
+            
+            let skinObj = skins.find(s => s.id === activeSkin);
+            let color = skinObj.color === 'rainbow' ? `hsl(${Date.now() / 5 % 360}, 100%, 50%)` : skinObj.color;
+
+            if (gameState === 'PLAYING') {
+                trail.push({x: player.x, y: player.y, o: 1});
+                if(trail.length > 12) trail.shift();
+            }
+            trail.forEach((t, i) => {
+                t.o -= 0.08; ctx.globalAlpha = Math.max(0, t.o); ctx.fillStyle = color;
+                ctx.fillRect(t.x - (12-i)*2, t.y, player.size, player.size);
+            });
+            ctx.globalAlpha = 1;
+
+            ctx.shadowBlur = 20; ctx.shadowColor = color; ctx.fillStyle = color;
+            ctx.fillRect(player.x, player.y, player.size, player.size);
+
+            obstacles.forEach(o => {
+                ctx.shadowBlur = 15; ctx.shadowColor = o.c; ctx.fillStyle = o.c;
+                ctx.fillRect(o.x, canvas.height-50-o.h, o.w, o.h);
+            });
+
+            ctx.shadowBlur = 0; update(); requestAnimationFrame(draw);
+        }
+
+        function varColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name); }
+
+        window.addEventListener('resize', init);
+        init(); draw();
+    </script>
+</body>
+</html>
